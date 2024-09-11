@@ -1,25 +1,63 @@
 const express = require('express');
 const { VM } = require('vm2');
+const escapeStringRegexp = require('escape-string-regexp');
 
 const app = express();
 
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Welcome to the JavaScript Runner API. Send POST requests to /api/run-js to execute code.');
-});
+function sanitizeInput(input) {
+  if (typeof input !== 'string') {
+    return String(input);
+  }
+  
+  // Remove null bytes
+  input = input.replace(/\0/g, '');
+  
+  // Escape special characters
+  input = escapeStringRegexp(input);
+  
+  // Truncate if too long (adjust max length as needed)
+  const maxLength = 1000;
+  if (input.length > maxLength) {
+    input = input.slice(0, maxLength) + '...';
+  }
+  
+  return input;
+}
 
 app.post('/api/run-js', (req, res) => {
-  console.log('Received request:', req.body);  // Log the incoming request
+  console.log('Received request:', req.body);
 
-  const { code } = req.body;
+  let { text } = req.body;
   
-  if (!code) {
-    console.log('No code provided');
-    return res.status(400).json({ error: 'No code provided' });
+  if (text === undefined || text === null) {
+    console.log('No text provided');
+    return res.status(400).json({ error: 'No text provided' });
   }
 
-  console.log('Executing code:', code);  // Log the code being executed
+  const sanitizedText = sanitizeInput(text);
+  console.log('Sanitized text:', sanitizedText);
+
+  // Wrap the sanitized text in a safe JavaScript structure
+  const code = `
+    (function() {
+      const input = "${sanitizedText}";
+      
+      // You can perform operations on the input here
+      // For example, counting words:
+      const wordCount = input.split(/\\s+/).filter(word => word.length > 0).length;
+      
+      return {
+        originalText: input,
+        wordCount: wordCount,
+        characterCount: input.length,
+        // Add more properties or transformations as needed
+      };
+    })();
+  `;
+
+  console.log('Executing code:', code);
 
   const vm = new VM({
     timeout: 5000,
@@ -28,21 +66,19 @@ app.post('/api/run-js', (req, res) => {
 
   try {
     const result = vm.run(code);
-    console.log('Execution result:', result);  // Log the execution result
+    console.log('Execution result:', result);
     res.json({ result });
   } catch (error) {
     console.error('Code execution error:', error);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Error processing text', details: error.message });
   }
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error', details: err.message, stack: err.stack });
+  res.status(500).json({ error: 'Internal server error', details: err.message });
 });
 
-// For local testing
 if (require.main === module) {
   const port = process.env.PORT || 3000;
   app.listen(port, () => {
