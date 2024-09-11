@@ -10,11 +10,16 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/run-js', (req, res) => {
+  console.log('Received request:', req.body);  // Log the incoming request
+
   const { code } = req.body;
   
   if (!code) {
+    console.log('No code provided');
     return res.status(400).json({ error: 'No code provided' });
   }
+
+  console.log('Executing code:', code);  // Log the code being executed
 
   const vm = new VM({
     timeout: 5000,
@@ -23,11 +28,18 @@ app.post('/api/run-js', (req, res) => {
 
   try {
     const result = vm.run(code);
+    console.log('Execution result:', result);  // Log the execution result
     res.json({ result });
   } catch (error) {
     console.error('Code execution error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error', details: err.message, stack: err.stack });
 });
 
 // For local testing
