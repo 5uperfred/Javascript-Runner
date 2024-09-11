@@ -1,10 +1,15 @@
 const express = require('express');
 const { VM } = require('vm2');
+
 const app = express();
 
 app.use(express.json());
 
-app.post('/run-js', (req, res) => {
+app.get('/', (req, res) => {
+  res.send('Welcome to the JavaScript Runner API. Send POST requests to /api/run-js to execute code.');
+});
+
+app.post('/api/run-js', (req, res) => {
   const { code } = req.body;
   
   if (!code) {
@@ -20,13 +25,17 @@ app.post('/run-js', (req, res) => {
     const result = vm.run(code);
     res.json({ result });
   } catch (error) {
+    console.error('Code execution error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// For local testing
+if (require.main === module) {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
 
 module.exports = app;
